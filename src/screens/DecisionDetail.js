@@ -1,43 +1,50 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import { useHistory } from 'react-router-dom'
+import styled from 'styled-components'
 import {
   BackButton,
   Box,
   GU,
-  IconTime,
   LoadingRing,
   Split,
   textStyle,
-  Timer,
   useLayout,
   useTheme,
 } from '@1hive/1hive-ui'
 
+import ActionCollateral from '../components/ActionCollateral'
+import ChallengeProposalScreens from '../components/ModalFlows/ChallengeProposalScreens/ChallengeProposalScreens'
 import Description from '../components/Description'
+import DisputableActionInfo from '../components/DisputableActionInfo'
+import DisputeFees from '../components/DisputeFees'
+import MultiModal from '../components/MultiModal/MultiModal'
 import IdentityBadge from '../components/IdentityBadge'
+import ProposalIcon from '../components/ProposalIcon'
+import RaiseDisputeScreens from '../components/ModalFlows/RaiseDisputeScreens/RaiseDisputeScreens'
+import SettleProposalScreens from '../components/ModalFlows/SettleProposalScreens/SettleProposalScreens'
 import SummaryBar from '../components/DecisionDetail/SummaryBar'
 import SummaryRow from '../components/DecisionDetail/SummaryRow'
-import VoteCasted from '../components/DecisionDetail/VoteCasted'
 import VoteActions from '../components/DecisionDetail/VoteActions'
-import VoteStatus from '../components/DecisionDetail/VoteStatus'
+import VoteCasted from '../components/DecisionDetail/VoteCasted'
+import VoteStatus, {
+  getStatusAttributes,
+} from '../components/DecisionDetail/VoteStatus'
 
-import { useWallet } from '../providers/Wallet'
-import { useDescribeVote } from '../hooks/useDescribeVote'
 import { useAppState } from '../providers/AppState'
-import { useBlockTimeStamp } from '../hooks/useBlock'
+import { useDescribeVote } from '../hooks/useDescribeVote'
+import { useWallet } from '../providers/Wallet'
 
 import { addressesEqualNoSum as addressesEqual } from '../utils/web3-utils'
 import { round, safeDiv } from '../utils/math-utils'
-import {
-  getConnectedAccountVote,
-  getQuorumProgress,
-  getVoteSuccess,
-} from '../utils/vote-utils'
-import { dateFormat } from '../utils/date-utils'
+import { getConnectedAccountVote, getQuorumProgress } from '../utils/vote-utils'
 
 import { PCT_BASE, VOTE_NAY, VOTE_YEA } from '../constants'
+import { convertToString } from '../types'
+import DisputableInfo from '../components/DisputableInfo'
 
 function DecisionDetail({ proposal, actions }) {
+  const [modalVisible, setModalVisible] = useState(false)
+  const [modalMode, setModalMode] = useState(null)
   const theme = useTheme()
   const history = useHistory()
   const { layoutName } = useLayout()
@@ -57,6 +64,8 @@ function DecisionDetail({ proposal, actions }) {
     proposal,
     connectedAccount
   )
+
+  const { background, borderColor } = getStatusAttributes(proposal, theme)
 
   const youVoted =
     connectedAccountVote === VOTE_YEA || connectedAccountVote === VOTE_NAY
@@ -84,6 +93,11 @@ function DecisionDetail({ proposal, actions }) {
     actions.executeDecision(proposal.number)
   }, [actions, proposal.number])
 
+  const handleShowModal = useCallback(mode => {
+    setModalVisible(true)
+    setModalMode(mode)
+  }, [])
+
   return (
     <div
       css={`
@@ -107,7 +121,12 @@ function DecisionDetail({ proposal, actions }) {
       >
         <Split
           primary={
-            <Box>
+            <Box
+              css={`
+                background: ${background};
+                border-color: ${borderColor};
+              `}
+            >
               <section
                 css={`
                   display: grid;
@@ -115,50 +134,89 @@ function DecisionDetail({ proposal, actions }) {
                   grid-row-gap: ${7 * GU}px;
                 `}
               >
-                <h1
-                  css={`
-                    ${textStyle('title2')};
-                  `}
-                >
-                  {`Vote #${number}`}
-                </h1>
+                <div>
+                  <div
+                    css={`
+                      display: flex;
+                      align-items: center;
+                      margin-bottom: ${2 * GU}px;
+                    `}
+                  >
+                    <ProposalIcon type={proposal.type} />
+                    <span
+                      css={`
+                        margin-left: ${0.5 * GU}px;
+                      `}
+                    >
+                      {convertToString(proposal.type)}
+                    </span>
+                  </div>
+                  <h1
+                    css={`
+                      ${textStyle('title2')};
+                    `}
+                  >
+                    {`Vote #${number}`}
+                  </h1>
+                </div>
                 <div
                   css={`
                     display: grid;
-                    grid-template-columns: ${layoutName !== 'small'
-                      ? `auto auto`
-                      : 'auto'};
-                    grid-gap: ${layoutName !== 'small' ? 10 * GU : 2.5 * GU}px;
+                    grid-template-columns: auto;
+                    grid-gap: ${5 * GU}px;
                   `}
                 >
-                  <DataField
-                    label="Description"
-                    value={
-                      emptyScript ? (
-                        proposal.metadata
-                      ) : (
-                        <Description path={description} />
-                      )
-                    }
-                    loading={descriptionLoading}
-                  />
-                  <DataField
-                    label="Submitted by"
-                    value={
-                      <IdentityBadge
-                        connectedAccount={addressesEqual(
-                          creator,
-                          connectedAccount
-                        )}
-                        entity={creator}
-                      />
-                    }
-                  />
+                  <Row
+                    compactMode={oneColumn}
+                    cols={proposal.pausedAt > 0 ? 3 : 2}
+                  >
+                    <DataField
+                      label="Description"
+                      value={
+                        emptyScript ? (
+                          proposal.metadata
+                        ) : (
+                          <Description path={description} />
+                        )
+                      }
+                      loading={descriptionLoading}
+                    />
+                    {proposal.pausedAt > 0 && <div />}
+                    <DataField
+                      label="Status"
+                      value={<VoteStatus vote={proposal} />}
+                    />
+                  </Row>
+                  <Row
+                    compactMode={oneColumn}
+                    cols={proposal.pausedAt > 0 ? 3 : 2}
+                  >
+                    <DataField
+                      label="Action collateral"
+                      value={<ActionCollateral proposal={proposal} />}
+                    />
+                    {proposal.pausedAt > 0 && (
+                      <DisputeFees proposal={proposal} />
+                    )}
+                    <DataField
+                      label="Submitted by"
+                      value={
+                        <IdentityBadge
+                          connectedAccount={addressesEqual(
+                            creator,
+                            connectedAccount
+                          )}
+                          entity={creator}
+                        />
+                      }
+                    />
+                  </Row>
                 </div>
               </section>
               <div
                 css={`
-                  margin-top: ${2 * GU}px;
+                  margin-top: ${6 * GU}px;
+                  margin-bottom: ${4 * GU}px;
                 `}
               >
                 <SummaryInfo vote={proposal} />
@@ -170,19 +228,26 @@ function DecisionDetail({ proposal, actions }) {
                   />
                 )}
               </div>
-              <VoteActions
-                onExecute={handleExecute}
-                onVoteNo={handleVoteNo}
-                onVoteYes={handleVoteYes}
-                vote={proposal}
-              />
+              <DisputableInfo proposal={proposal} />
+              {proposal.statusData.open && (
+                <VoteActions
+                  onExecute={handleExecute}
+                  onVoteNo={handleVoteNo}
+                  onVoteYes={handleVoteYes}
+                  vote={proposal}
+                />
+              )}
             </Box>
           }
           secondary={
             <>
-              <Box heading="Status">
-                <Status vote={proposal} />
-              </Box>
+              <DisputableActionInfo
+                proposal={proposal}
+                onChallengeAction={() => handleShowModal('challenge')}
+                onDisputeAction={() => handleShowModal('dispute')}
+                onSettleAction={() => handleShowModal('settle')}
+              />
+
               <Box heading="Relative support %">
                 <div
                   css={`
@@ -241,6 +306,26 @@ function DecisionDetail({ proposal, actions }) {
           }
         />
       </div>
+      <MultiModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onClosed={() => setModalMode(null)}
+      >
+        {modalMode === 'challenge' && (
+          <ChallengeProposalScreens
+            agreementActions={{
+              challengeAction: actions.challengeAction,
+              getAllowance: actions.getAllowance,
+              approveChallengeTokenAmount: actions.approveChallengeTokenAmount,
+            }}
+            proposal={proposal}
+          />
+        )}
+        {modalMode === 'settle' && (
+          <SettleProposalScreens proposal={proposal} />
+        )}
+        {modalMode === 'dispute' && <RaiseDisputeScreens proposal={proposal} />}
+      </MultiModal>
     </div>
   )
 }
@@ -289,7 +374,7 @@ function SummaryInfo({ vote }) {
   return (
     <div>
       <DataField
-        label="Votes"
+        label="Current votes"
         value={
           <>
             <SummaryBar
@@ -333,68 +418,13 @@ function SummaryInfo({ vote }) {
   )
 }
 
-function Status({ vote }) {
-  const theme = useTheme()
+const Row = styled.div`
+  display: grid;
 
-  const { endBlock } = vote
-  const { upcoming, open, delayed, closed, transitionAt } = vote.data
-
-  const endBlockTimeStamp = useBlockTimeStamp(endBlock)
-
-  if (!closed || (delayed && getVoteSuccess(vote, PCT_BASE))) {
-    return (
-      <React.Fragment>
-        <div
-          css={`
-            ${textStyle('body2')};
-            color: ${theme.surfaceContentSecondary};
-            margin-bottom: ${1 * GU}px;
-          `}
-        >
-          {upcoming
-            ? `Time to start `
-            : open
-            ? ` Time remaining`
-            : `Time for enactment`}
-        </div>
-        <Timer end={transitionAt} maxUnits={4} />
-      </React.Fragment>
-    )
-  }
-
-  const dateHasLoaded = endBlockTimeStamp
-  return (
-    <React.Fragment>
-      <VoteStatus vote={vote} />
-      {!closed && (
-        <div
-          css={`
-            margin-top: ${1 * GU}px;
-            display: inline-grid;
-            grid-template-columns: auto auto;
-            grid-gap: ${1 * GU}px;
-            align-items: center;
-            color: ${theme.surfaceContentSecondary};
-            ${textStyle('body2')};
-          `}
-        >
-          <IconTime size="small" />{' '}
-          {dateHasLoaded ? (
-            dateFormat(new Date(endBlockTimeStamp))
-          ) : (
-            <div
-              css={`
-                height: 25px;
-                width: 150px;
-                background: #f9fafc;
-                border-radius: 6px;
-              `}
-            />
-          )}
-        </div>
-      )}
-    </React.Fragment>
-  )
-}
+  ${({ compactMode = false, cols = 2 }) => `
+    grid-gap: ${(compactMode ? 2.5 : 5) * GU}px;
+    grid-template-columns: ${compactMode ? 'auto' : `repeat(${cols}, 1fr)`};
+  `}
+`
 
 export default DecisionDetail
